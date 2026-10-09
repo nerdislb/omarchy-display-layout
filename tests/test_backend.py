@@ -147,7 +147,7 @@ class BackendTests(unittest.TestCase):
         with self.assertRaisesRegex(b.LayoutError, 'changed outside'):
             self.be.dispatch('keep', token)
         self.assertTrue(self.be.monitors_file.read_bytes().endswith(b'-- concurrent edit'))
-        self.assertEqual(b.positions(self.be.m), self.target)
+        self.assertEqual(b.positions(self.be.m), b.positions(monitors()))
         self.assertIsNone(self.be.load())
 
     def test_hotplug_or_scale_change_not_overridden(self):
@@ -334,10 +334,30 @@ class BackendTests(unittest.TestCase):
     def test_status_detects_stale_preview_before_expiry(self):
         self.preview()
         (self.be.config / 'input.lua').write_text('-- a concurrent edit')
-        with self.assertRaisesRegex(b.LayoutError, 'Stale preview discarded'):
+        with self.assertRaisesRegex(b.LayoutError, 'Preview reverted'):
             self.be.dispatch('status')
         self.assertIsNone(self.be.load())
+        self.assertEqual(b.positions(self.be.m), b.positions(monitors()))
+        self.assertEqual((self.be.config / 'input.lua').read_text(), '-- a concurrent edit')
+
+    def test_helper_lost_after_apply_before_phase_save_can_be_kept(self):
+        token = self.preview()
+        pending = self.be.load()
+        pending['phase'] = 'applying'
+        self.be.save(pending)
+        self.assertIsNotNone(self.be.dispatch('status')['pending'])
+        self.assertTrue(self.be.dispatch('keep', token)['ok'])
         self.assertEqual(b.positions(self.be.m), self.target)
+
+    def test_watchdog_after_unrelated_lua_edit_restores_runtime_only(self):
+        token = self.preview()
+        path = self.be.config / 'input.lua'
+        path.write_text('-- a newer unrelated setting')
+        self.be.dispatch('_watchdog', token)
+        self.assertEqual(b.positions(self.be.m), b.positions(monitors()))
+        self.assertEqual(path.read_text(), '-- a newer unrelated setting')
+        self.assertEqual(self.be.monitors_file.read_bytes(), self.be.original)
+        self.assertIsNone(self.be.load())
 
 
     def test_ambiguous_selector_rejected(self):

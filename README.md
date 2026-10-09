@@ -6,7 +6,12 @@ root access, new toolkit or background startup service.
 
 ## Use
 
-Click the stacked-display icon next to your System group. The rectangles show
+In the existing **System → Display & brightness** popup, select **Layout**.
+The **Display & brightness** tab keeps the original brightness, text-size,
+scale and display controls. It is disabled during a pending preview.
+
+A standalone stacked-display bar button is also available for other setups.
+The rectangles show
 **logical screen space**, not the physical size of the monitors.
 
 1. Select a display and drag it into place. Edges and centres snap.
@@ -61,16 +66,58 @@ result live under `~/.local/state/omarchy-display-layout/`.
 
 ## Install
 
-Copy this repository to `~/.config/omarchy/plugins/nerdibeard.display-layout`,
-then run:
+### Existing cloned display widget (recommended here)
+
+This repository includes an adapter for `nerdibeard.monitor`, the user's existing
+clone of Omarchy's monitor widget. It embeds the same reusable `Editor.qml`
+inside the original native popup. No second widget is enabled and no bar layout
+settings are rewritten.
 
 ```sh
-omarchy plugin validate ~/.config/omarchy/plugins/nerdibeard.display-layout
-omarchy-shell shell rescanPlugins
-omarchy plugin enable nerdibeard.display-layout --section right --after tusche.status
+./dev-install.sh --integrate-monitor
 ```
 
-The plugin is independent of the custom bar's source. Disable its bar button:
+The adapter requires the existing clone at
+`~/.config/omarchy/plugins/nerdibeard.monitor`. It preserves brightness and the
+native display controls and replaces the old immediate-save arrangement helper.
+The old helper and arrangement files may remain on disk but are no longer called.
+The installer backs up the entire previous clone under
+`~/.local/state/omarchy-display-layout/monitor-backups/` before installing.
+Review/port the adapter if your cloned display widget has additional custom edits;
+installation replaces its `Panel.qml`, `Model.js` and manifest with this version.
+The adapter derives from Omarchy's MIT-licensed monitor widget.
+
+The host owns popup placement, theme material, focus and open/close lifecycle.
+Only the instance that started a preview owns close-to-revert; a closed panel on
+another monitor must not cancel it. Reopening via IPC during a preview routes to
+its owner. Runtime output rebuilds recover that owner in the recreated popup;
+a full shell restart still relies on the independent watchdog. `display-layout open/state/preset/reset/close`
+IPC selects the focused monitor's host. Opening through that IPC selects Layout.
+
+User plugins can remain cached after rescan; if the installed editor is not yet
+loaded, use `omarchy restart shell`. This restarts only the shell, not Hyprland.
+A restart also makes the user's already-saved plugin enable/disable settings
+effective; the installer itself does not change them.
+
+To restore the previous display widget, copy the backed-up `Panel.qml`, `Model.js`
+and `manifest.json` into `nerdibeard.monitor`, rescan, and restart the shell if
+needed. Saved monitor arrangements are unaffected by restoring the UI.
+
+### Standalone bar button
+
+For installations without this clone, install only the editor and enable its
+standalone button:
+
+```sh
+./dev-install.sh
+omarchy plugin enable nerdibeard.display-layout --section right
+```
+
+The embedded adapter requires the installed `nerdibeard.display-layout` folder.
+**Disable its standalone button, do not remove that folder.** The integrated
+installer refuses installation if the standalone bar button is enabled.
+Do not enable the standalone button together with the embedded adapter. Disable
+an existing standalone button with:
 
 ```sh
 omarchy plugin disable nerdibeard.display-layout
@@ -84,14 +131,17 @@ the saved override, back up `monitors.lua`, remove only the delimited
 
 ```sh
 node tests/model.cjs
+node tests/editor.cjs
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 python3 display_layout.py snapshot
 ```
 
 The automated checks use a mocked compositor for mutations. The plugin can be
 opened, dragged, preset, identified and visually inspected on a working desktop
-without pressing Apply. This is not proof that a real physical rearrangement
-has been accepted by the user.
+without pressing Apply. The controller lifecycle tests also cover
+closed instances on a second output, closing while Apply is in flight, stale
+drafts and clearing preview ownership. Automated checks are not proof that a
+real physical rearrangement has been accepted by the user.
 
 ## Design references
 

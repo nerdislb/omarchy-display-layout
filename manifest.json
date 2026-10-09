@@ -2,12 +2,16 @@
   "schemaVersion": 1,
   "id": "nerdibeard.display-layout",
   "name": "Display Layout",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Nerdibeard",
   "license": "MIT",
   "description": "Arrange your displays visually, with edge snapping and a timed Keep / Revert preview.",
-  "kinds": ["bar-widget"],
-  "entryPoints": {"barWidget": "Panel.qml"},
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
   "barWidget": {
     "displayName": "Display Layout",
     "description": "Drag displays into place without changing resolution, refresh rate or scaling.",

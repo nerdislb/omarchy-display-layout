@@ -383,8 +383,8 @@ class Backend:
         # active before a single compositor mutation is allowed.
         self.run(['systemctl', '--user', 'is-active', '--quiet', unit + '.timer'])
 
-    def stale_reason(self, p, live, allow_partial=False):
-        if self.files() != p['files']:
+    def stale_reason(self, p, live, allow_partial=False, check_files=True):
+        if check_files and self.files() != p['files']:
             return 'Display configuration changed outside this preview.'
         if hardware_signature(live) != p['hardware']:
             return 'Display connections, mode, scale or transform changed outside this preview.'
@@ -453,7 +453,11 @@ class Backend:
                     self.apply(p['before'], p['selectors'])
                     self.verify(p['before'], p['hardware'])
             else:
-                reason = self.stale_reason(p, self.live(), allow_partial=partial)
+                # A runtime-only preview has not written any configuration.
+                # Unrelated Lua edits must block Keep, but must not cancel the
+                # watchdog's position-only restoration. New live positions or
+                # hardware still take priority over our old preview.
+                reason = self.stale_reason(p, self.live(), allow_partial=partial, check_files=False)
                 if reason:
                     self.clear({'ok': False, 'error': reason + ' Stale preview discarded without changing current displays.'})
                     raise LayoutError(reason + ' Stale preview discarded without changing current displays.')
@@ -482,8 +486,8 @@ class Backend:
         if p:
             reason = self.stale_reason(p, live, allow_partial=p.get('phase') == 'applying')
             if reason:
-                self.clear({'ok': False, 'error': reason})
-                raise LayoutError(reason + ' Stale preview discarded without changing current displays.')
+                self.rollback(p, partial=p.get('phase') == 'applying')
+                raise LayoutError(reason + ' Preview reverted without changing configuration files.')
         last = file_bytes(self.last_file)
         return {'ok': True, 'monitors': live, 'revision': revision(live, self.files()), 'pending': self.pending_summary(p), 'lastResult': json.loads(last) if last else None}
 
@@ -563,8 +567,8 @@ class Backend:
             raise LayoutError('The preview expired and was reverted.')
         reason = self.stale_reason(p, self.live())
         if reason:
-            self.clear({'ok': False, 'error': reason})
-            raise LayoutError(reason + ' Nothing was saved.')
+            self.rollback(p)
+            raise LayoutError(reason + ' Nothing was saved; preview reverted.')
         old = self.monitors_file.read_bytes()
         content = self.overlay(p['target'], p['selectors'])
         updates = [(self.layout_file, content), (self.monitors_file, merge_marker(old, self.layout_file))]
